@@ -9,6 +9,8 @@ import logging
 from datetime import timedelta
 from typing import Optional
 
+from types import SimpleNamespace
+
 from evnex.api import Evnex
 from evnex.schema.charge_points import EvnexChargePoint, EvnexChargePointOverrideConfig
 from evnex.schema.v3.charge_points import EvnexChargePointDetail
@@ -86,6 +88,11 @@ def retrieve_evnex_auth_tokens(
                 return None
 
     return None
+
+
+def _default_charge_point_override() -> object:
+    """Return a minimal override-like object for missing override data."""
+    return SimpleNamespace(chargeNow=False)
 
 
 async def async_setup(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -213,12 +220,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         )
                     )
 
-                    # Only get the charge point override if the charge point is online!
                     if charge_point_detail.networkStatus == "ONLINE":
                         _LOGGER.debug(
                             f"Getting evnex charge point override for '{charge_point.name}'"
                         )
-                        # Don't block data update if a read timeout encountered
                         try:
                             charge_point_override: EvnexChargePointOverrideConfig = (
                                 await evnex_client.get_charge_point_override(
@@ -227,15 +232,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             )
                         except ReadTimeout:
                             _LOGGER.warning(
-                                "Read timeout prevented getting charge point override"
+                                "Read timeout prevented getting charge point override, using defaults"
                             )
-                            charge_point_override = None
+                            charge_point_override = _default_charge_point_override()
                     else:
                         _LOGGER.debug(
-                            "Not getting charge point override as charge point is not ONLINE"
+                            "Not getting charge point override as charge point is not ONLINE, using defaults"
                         )
-                        charge_point_override = None
-
+                        charge_point_override = _default_charge_point_override()
                     data["charge_point_brief"][charge_point.id] = charge_point
                     data["charge_point_details"][charge_point.id] = charge_point_detail
                     data["charge_point_override"][charge_point.id] = (
